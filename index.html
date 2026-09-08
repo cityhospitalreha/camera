@@ -642,13 +642,29 @@
   let selectedMaskId = null;
   let maskSeq = 0;
   let exportedUrl = null;
+  let exportedExt = 'webm';
 
   function pickMime() {
-    const candidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    // Safariはwebmの録画に対応していないことがあるため、mp4も候補に入れておく
+    const candidates = [
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+      'video/mp4;codecs=avc1',
+      'video/mp4'
+    ];
     for (const c of candidates) {
       if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return { mimeType: c };
     }
-    return {};
+    return {}; // どれも対応がなければブラウザの既定に任せる
+  }
+
+  // 実際に使われた形式(mimeType)から、拡張子とBlobの種類を決める
+  function mimeInfo(recorder) {
+    const mt = (recorder && recorder.mimeType) ? recorder.mimeType : 'video/webm';
+    const container = mt.split(';')[0]; // 'video/webm' や 'video/mp4' の部分だけ取り出す
+    const ext = container.includes('mp4') ? 'mp4' : 'webm';
+    return { type: container, ext };
   }
 
   // --- 録画開始/終了 ---
@@ -676,28 +692,45 @@
     recDot.classList.add('hidden');
   }
 
-  function onRecordingStopped() {
+  // 録画したwebmは、ブラウザが「長さ(duration)」を正しく認識できないことがある。
+  // 一度うんと先の時間にシークしてから0に戻すと、長さを正しく読み直してくれる(既知の対策)
+  function fixDuration(v) {
+    return new Promise((resolve) => {
+      function onTimeUpdate() {
+        v.removeEventListener('timeupdate', onTimeUpdate);
+        v.currentTime = 0;
+        v.addEventListener('seeked', () => resolve(), { once: true });
+      }
+      v.addEventListener('timeupdate', onTimeUpdate);
+      v.currentTime = 1e7;
+    });
+  }
+
+  async function onRecordingStopped() {
     stopCameraTracks(); // マスク配置・書き出し中はカメラ不要なので止めておく(不要な映像を扱わないため)
-    const rawBlob = new Blob(rawChunks, { type: 'video/webm' });
+    const { type } = mimeInfo(mediaRecorder);
+    const rawBlob = new Blob(rawChunks, { type });
     rawChunks = [];
     rawBlobUrl = URL.createObjectURL(rawBlob);
     playback.src = rawBlobUrl;
 
-    playback.addEventListener('loadeddata', function onLoaded() {
-      playback.removeEventListener('loadeddata', onLoaded);
-      canvas.width = playback.videoWidth;
-      canvas.height = playback.videoHeight;
-      ctx.drawImage(playback, 0, 0, canvas.width, canvas.height);
+    await new Promise((resolve) => {
+      playback.addEventListener('loadedmetadata', resolve, { once: true });
+    });
+    await fixDuration(playback);
 
-      video.classList.add('hidden');
-      canvas.classList.remove('hidden');
-      maskLayer.classList.remove('hidden');
+    canvas.width = playback.videoWidth;
+    canvas.height = playback.videoHeight;
+    ctx.drawImage(playback, 0, 0, canvas.width, canvas.height);
 
-      btnRecToggle.disabled = true;
-      btnAddMask.disabled = false;
-      btnVideoRetake.disabled = false;
-      hint.textContent = 'モザイクをかけたい場所に枠を置いてください(ドラッグで移動、右下の丸で大きさ変更)';
-    }, { once: true });
+    video.classList.add('hidden');
+    canvas.classList.remove('hidden');
+    maskLayer.classList.remove('hidden');
+
+    btnRecToggle.disabled = true;
+    btnAddMask.disabled = false;
+    btnVideoRetake.disabled = false;
+    hint.textContent = 'モザイクをかけたい場所に枠を置いてください(ドラッグで移動、右下の丸で大きさ変更)';
   }
 
   // --- マスク枠の追加・選択・削除 ---
@@ -857,15 +890,24 @@
     await playback.play();
     frameLoop();
 
-    await new Promise((resolve) => {
-      playback.onended = resolve;
-    });
+    // duration(長さ)を正しく認識できていれば、想定される長さ+余裕分だけ待てば十分。
+    // 万が一 'ended' が発生しない場合でも、ここで強制的に打ち切って
+    // 「書き出し中」のまま固まってしまうのを防ぐ
+    const expectedMs = (isFinite(playback.duration) && playback.duration > 0
+      ? playback.duration * 1000
+      : 60000) + 4000;
+    await Promise.race([
+      new Promise((resolve) => { playback.onended = resolve; }),
+      new Promise((resolve) => setTimeout(resolve, expectedMs))
+    ]);
     rendering = false;
-    outRecorder.stop();
+    if (outRecorder.state !== 'inactive') outRecorder.stop();
     await stopped;
 
-    const maskedBlob = new Blob(outChunks, { type: 'video/webm' });
+    const { type: outType, ext: outExt } = mimeInfo(outRecorder);
+    const maskedBlob = new Blob(outChunks, { type: outType });
     exportedUrl = URL.createObjectURL(maskedBlob);
+    exportedExt = outExt;
 
     // 生の録画データはもう不要なので破棄する
     if (rawBlobUrl) { URL.revokeObjectURL(rawBlobUrl); rawBlobUrl = null; }
@@ -882,7 +924,7 @@
     if (!exportedUrl) return;
     const link = document.createElement('a');
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    link.download = `mosaic-video-${ts}.webm`;
+    link.download = `mosaic-video-${ts}.${exportedExt}`;
     link.href = exportedUrl;
     link.click();
   });
