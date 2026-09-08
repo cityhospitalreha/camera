@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#2a6f77">
+<title>モザイクスタンプ</title>
+<style>
+  :root {
+    --bg: #eef1f4;
+    --panel: #ffffff;
+    --ink: #26303a;
+    --ink-soft: #5b6672;
+    --accent: #2a6f77;
+    --accent-dark: #1f545a;
+    --border: #d7dee3;
+    --danger: #b3543f;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    overscroll-behavior: none;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+  header {
+    padding: 14px 18px 10px;
+    flex-shrink: 0;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  header p {
+    margin: 4px 0 0;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+  main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 14px;
+    position: relative;
+  }
+  .stage {
+    position: relative;
+    width: 100%;
+    max-width: 760px;
+    background: #0d1113;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    touch-action: none;
+  }
+  video, canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  #video.hidden, #canvas.hidden { display: none; }
+  .placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8a97a1;
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+  }
+  footer {
+    flex-shrink: 0;
+    padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .row:last-child { margin-bottom: 0; }
+  .row label {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    width: 78px;
+    flex-shrink: 0;
+  }
+  input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+  .row .val {
+    font-size: 12px;
+    color: var(--ink-soft);
+    width: 28px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .shape-toggle {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+  }
+  .shape-btn {
+    flex: 1;
+    padding: 7px 8px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .shape-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  button {
+    min-height: 46px;
+    padding: 10px 8px;
+    border: none;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:active { transform: translateY(1px); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:disabled { background: #b9c3ca; color: #eef1f4; }
+  .btn-secondary { background: #eef1f4; color: var(--ink); border: 1px solid var(--border); }
+  .btn-secondary:disabled { color: #b3bcc4; }
+  .btn-danger { background: #fff; color: var(--danger); border: 1px solid #e6c9c2; }
+  .btn-danger:disabled { color: #d9b9b2; border-color: #f0ded9; }
+  .hint {
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    text-align: center;
+    margin-top: 8px;
+  }
+  .mode-tabs {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .mode-tab {
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--ink-soft);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .mode-tab.active {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: #fff;
+  }
+  .mask-layer {
+    position: absolute;
+    inset: 0;
+  }
+  .mask-box {
+    position: absolute;
+    border: 2px solid #ffd166;
+    background: rgba(255, 209, 102, 0.18);
+    touch-action: none;
+  }
+  .mask-box.circle { border-radius: 50%; }
+  .mask-box.selected { border-color: #fff; }
+  .mask-box .handle {
+    position: absolute;
+    right: -10px;
+    bottom: -10px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #ffd166;
+    border: 2px solid #fff;
+    touch-action: none;
+  }
+  .rec-dot {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 20px;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    font-size: 12px;
+  }
+  .rec-dot .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e0483e;
+    animation: blink 1s infinite;
+  }
+  @keyframes blink { 50% { opacity: 0.25; } }
+  .export-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(13,17,19,0.75);
+    color: #fff;
+    font-size: 13.5px;
+    text-align: center;
+    padding: 20px;
+  }
+  .policy-link {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(13,17,19,0.55);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 50;
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal-sheet {
+    background: #fff;
+    width: 100%;
+    max-width: 560px;
+    max-height: 82vh;
+    border-radius: 16px 16px 0 0;
+    padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    box-shadow: 0 -2px 20px rgba(0,0,0,0.2);
+  }
+  .modal-sheet h2 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .modal-sheet .updated {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-bottom: 14px;
+  }
+  .modal-sheet h3 {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 16px 0 6px;
+    color: var(--accent-dark);
+  }
+  .modal-sheet p, .modal-sheet li {
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--ink);
+  }
+  .modal-sheet ul {
+    margin: 4px 0;
+    padding-left: 18px;
+  }
+  .modal-close {
+    display: block;
+    width: 100%;
+    margin-top: 18px;
+    padding: 12px;
+    border: none;
+    border-radius: 9px;
+    background: var(--ink);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>モザイクスタンプ</h1>
+  <p id="modeDesc">撮影して、隠したい部分を指(またはマウス)でなぞってください</p>
+  <div class="mode-tabs">
+    <button type="button" id="tabPhoto" class="mode-tab active">📷 写真</button>
+    <button type="button" id="tabVideo" class="mode-tab">🎥 動画</button>
+  </div>
+  <button type="button" class="policy-link" id="btnOpenPolicy">🛈 個人情報の取り扱いについて</button>
+</header>
+
+<main id="mainArea">
+  <div class="stage" id="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas" class="hidden"></canvas>
+    <video id="playback" class="hidden" playsinline muted></video>
+    <div class="mask-layer hidden" id="maskLayer"></div>
+    <div class="rec-dot hidden" id="recDot"><span class="dot"></span>録画中</div>
+    <div class="export-overlay hidden" id="exportOverlay">書き出し中…<br>動画の長さぶん、少しお待ちください</div>
+    <div class="placeholder" id="placeholder">カメラを起動しています…</div>
+  </div>
+</main>
+
+<footer>
+  <div class="row" id="brushRow">
+    <label for="brush" id="brushLabel">ブラシの太さ</label>
+    <input type="range" id="brush" min="10" max="80" value="30">
+    <span class="val" id="brushVal">30</span>
+  </div>
+  <div class="row">
+    <label for="strength">モザイクの粗さ</label>
+    <input type="range" id="strength" min="6" max="40" value="16">
+    <span class="val" id="strengthVal">16</span>
+  </div>
+  <div class="row">
+    <label>スタンプの形</label>
+    <div class="shape-toggle">
+      <button type="button" id="shapeCircle" class="shape-btn active">丸</button>
+      <button type="button" id="shapeSquare" class="shape-btn">四角</button>
+    </div>
+  </div>
+
+  <div class="buttons" id="photoButtons">
+    <button id="btnShot" class="btn-primary">📷 撮影</button>
+    <button id="btnUndo" class="btn-secondary" disabled>↩︎ ひとつ戻す</button>
+    <button id="btnRetake" class="btn-danger" disabled>🔄 撮り直し</button>
+    <button id="btnSave" class="btn-primary" disabled>💾 保存</button>
+  </div>
+
+  <div class="buttons hidden" id="videoButtons">
+    <button id="btnRecToggle" class="btn-primary">⏺ 録画開始</button>
+    <button id="btnAddMask" class="btn-secondary" disabled>＋ 枠を追加</button>
+    <button id="btnVideoRetake" class="btn-danger" disabled>🔄 撮り直し</button>
+    <button id="btnExport" class="btn-primary" disabled>🎬 書き出す</button>
+  </div>
+  <div class="buttons hidden" id="videoSaveRow" style="margin-top:8px;">
+    <button id="btnRemoveMask" class="btn-secondary" disabled>枠を1つ削除</button>
+    <button id="btnVideoSave" class="btn-primary" disabled>💾 保存</button>
+  </div>
+
+  <p class="hint" id="hint">「撮影」を押すと写真が固定され、なぞってモザイクをかけられます</p>
+</footer>
+
+<div class="modal-overlay hidden" id="policyModal">
+  <div class="modal-sheet">
+    <h2>個人情報の取り扱いについて</h2>
+    <p class="updated">最終更新:2026年9月</p>
+
+    <h3>アプリの構成</h3>
+    <p>本アプリはHTML・CSS・JavaScriptのみで構成された静的Webアプリケーションで、GitHub Pages上で公開されています。サーバー側のプログラムは存在せず、撮影した写真・動画がどこかに自動送信されることはありません。開発の一部にAnthropic社のClaude Codeを利用していますが、Claude Codeは開発支援ツールとして使用したものであり、設計・検証・公開・運用の責任は開発者が負います。</p>
+
+    <h3>カメラ映像の扱い</h3>
+    <ul>
+      <li>撮影・録画した映像は、その端末のブラウザのメモリ上でのみ処理されます。外部サーバーへの送信は行いません。</li>
+      <li>音声は録音しません(声も個人を特定しうる情報になり得るためです)。</li>
+      <li>モザイク処理前の生データは、保存操作をしない限りディスクに書き出されません。動画の場合、モザイクを焼き込んだ書き出しが完了すると、生の録画データは自動的に破棄されます。</li>
+      <li>ページを閉じる・再読み込みするまでは、生データがブラウザのメモリ上に残っている場合があります。作業が終わったら、ページを閉じることをおすすめします。</li>
+    </ul>
+
+    <h3>保存したファイルについて</h3>
+    <p>「保存」操作でダウンロードされた画像・動画ファイルは、個人情報(患者さんの写真・映像)そのものです。保存後の管理(保存場所・共有方法・削除のタイミングなど)は、所属施設の個人情報保護の方針に沿って利用者ご自身で行ってください。本アプリはモザイクをかけるための道具であり、保存後のファイル管理までは行いません。</p>
+
+    <h3>本アプリの目的・適用範囲</h3>
+    <p>本アプリは、写真・動画から個人が特定できる部分を隠す(モザイク処理をする)ことを目的としています。診断や臨床判断を行う機能は持たず、それらは療法士が行うものとします。</p>
+
+    <button type="button" class="modal-close" id="btnClosePolicy">閉じる</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ---------- 要素の取得 ----------
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const playback = document.getElementById('playback');
+  const maskLayer = document.getElementById('maskLayer');
+  const recDot = document.getElementById('recDot');
+  const exportOverlay = document.getElementById('exportOverlay');
+  const placeholder = document.getElementById('placeholder');
+  const stage = document.getElementById('stage');
+  const mainArea = document.getElementById('mainArea');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  const tabPhoto = document.getElementById('tabPhoto');
+  const tabVideo = document.getElementById('tabVideo');
+  const modeDesc = document.getElementById('modeDesc');
+  const hint = document.getElementById('hint');
+
+  const brushRow = document.getElementById('brushRow');
+  const brushInput = document.getElementById('brush');
+  const brushVal = document.getElementById('brushVal');
+  const strengthInput = document.getElementById('strength');
+  const strengthVal = document.getElementById('strengthVal');
+
+  const shapeCircleBtn = document.getElementById('shapeCircle');
+  const shapeSquareBtn = document.getElementById('shapeSquare');
+  let brushShape = 'circle'; // 'circle' | 'square' (写真ブラシ & 新規マスク枠の初期形状)
+
+  const photoButtons = document.getElementById('photoButtons');
+  const btnShot = document.getElementById('btnShot');
+  const btnUndo = document.getElementById('btnUndo');
+  const btnRetake = document.getElementById('btnRetake');
+  const btnSave = document.getElementById('btnSave');
+
+  const videoButtons = document.getElementById('videoButtons');
+  const videoSaveRow = document.getElementById('videoSaveRow');
+  const btnRecToggle = document.getElementById('btnRecToggle');
+  const btnAddMask = document.getElementById('btnAddMask');
+  const btnRemoveMask = document.getElementById('btnRemoveMask');
+  const btnVideoRetake = document.getElementById('btnVideoRetake');
+  const btnExport = document.getElementById('btnExport');
+  const btnVideoSave = document.getElementById('btnVideoSave');
+
+  let appMode = 'photo'; // 'photo' | 'video'
+
+  // ---------- 画面サイズに合わせてstageの大きさを決める ----------
+  // CSSの aspect-ratio だけだと「横幅」からしか高さを計算できず、
+  // 画面の縦の余白が足りないときにはみ出してしまう。
+  // ここでは横幅・縦幅の両方の余白を見て、収まる方に合わせてサイズを決める
+  let currentRatio = 4 / 3; // 幅 ÷ 高さ。カメラの実際のサイズが分かったら更新する
+  function fitStage() {
+    const availW = mainArea.clientWidth;
+    const availH = mainArea.clientHeight;
+    let w = Math.min(availW, 760);
+    let h = w / currentRatio;
+    if (h > availH) {
+      h = availH;
+      w = h * currentRatio;
+    }
+    stage.style.width = Math.floor(w) + 'px';
+    stage.style.height = Math.floor(h) + 'px';
+  }
+  window.addEventListener('resize', fitStage);
+  window.addEventListener('orientationchange', fitStage);
+  fitStage();
+
+  brushInput.addEventListener('input', () => { brushVal.textContent = brushInput.value; });
+  strengthInput.addEventListener('input', () => { strengthVal.textContent = strengthInput.value; });
+
+  shapeCircleBtn.addEventListener('click', () => setShape('circle'));
+  shapeSquareBtn.addEventListener('click', () => setShape('square'));
+  function setShape(shape) {
+    brushShape = shape;
+    shapeCircleBtn.classList.toggle('active', shape === 'circle');
+    shapeSquareBtn.classList.toggle('active', shape === 'square');
+    // 動画モードで枠を選択中なら、その枠の形もあわせて変える
+    if (appMode === 'video' && selectedMaskId != null) {
+      const region = maskRegions.find(r => r.id === selectedMaskId);
+      if (region) { region.shape = shape; renderMaskBox(region); }
+    }
+  }
+
+  // ---------- カメラ起動(共通) ----------
+  async function startCamera() {
+    placeholder.textContent = 'カメラを起動しています…';
+    placeholder.style.display = 'flex';
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false // 音声は録らない(声も個人情報になり得るため)
+      });
+      video.srcObject = stream;
+      placeholder.style.display = 'none';
+
+      // 機種によってカメラの縦横比が違うので、実際の映像サイズが分かった時点で
+      // stageの比率をそれに合わせる
+      video.addEventListener('loadedmetadata', () => {
+        if (video.videoWidth && video.videoHeight) {
+          currentRatio = video.videoWidth / video.videoHeight;
+          fitStage();
+        }
+      }, { once: true });
+    } catch (err) {
+      placeholder.textContent = 'カメラを起動できませんでした(権限やHTTPS接続をご確認ください)';
+    }
+  }
+
+  function stopCameraTracks() {
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach(t => t.stop());
+      video.srcObject = null;
+    }
+  }
+
+  // ============================================================
+  //  写真モード(これまでと同じ仕組み)
+  // ============================================================
+  let mosaicCanvas = null;
+  let history = [];
+  let drawing = false;
+  let photoStage = 'camera'; // 'camera' | 'editing'
+
+  function buildMosaicCanvas(sourceCanvas, blockSize) {
+    const w = sourceCanvas.width, h = sourceCanvas.height;
+    const small = document.createElement('canvas');
+    small.width = Math.max(1, Math.floor(w / blockSize));
+    small.height = Math.max(1, Math.floor(h / blockSize));
+    small.getContext('2d').drawImage(sourceCanvas, 0, 0, small.width, small.height);
+
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    const octx = out.getContext('2d');
+    octx.imageSmoothingEnabled = false;
+    octx.drawImage(small, 0, 0, out.width, out.height);
+    return out;
+  }
+
+  btnShot.addEventListener('click', () => {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    mosaicCanvas = buildMosaicCanvas(canvas, parseInt(strengthInput.value, 10));
+    history = [ctx.getImageData(0, 0, canvas.width, canvas.height)];
+
+    video.classList.add('hidden');
+    canvas.classList.remove('hidden');
+    stopCameraTracks();
+
+    photoStage = 'editing';
+    btnShot.disabled = true;
+    btnUndo.disabled = true;
+    btnRetake.disabled = false;
+    btnSave.disabled = false;
+    strengthInput.disabled = true;
+    hint.textContent = 'なぞった部分にモザイクがかかります。太さと粗さは上のスライダーで調整できます';
+  });
+
+  function stampAt(x, y) {
+    const r = parseInt(brushInput.value, 10);
+    ctx.save();
+    ctx.beginPath();
+    if (brushShape === 'square') ctx.rect(x - r, y - r, r * 2, r * 2);
+    else ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(mosaicCanvas, 0, 0);
+    ctx.restore();
+  }
+
+  function getCanvasPos(evt) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (evt.clientX - rect.left) * (canvas.width / rect.width),
+      y: (evt.clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+
+  canvas.addEventListener('pointerdown', (evt) => {
+    if (appMode !== 'photo' || photoStage !== 'editing') return;
+    canvas.setPointerCapture(evt.pointerId);
+    drawing = true;
+    const p = getCanvasPos(evt);
+    stampAt(p.x, p.y);
+  });
+  canvas.addEventListener('pointermove', (evt) => {
+    if (!drawing) return;
+    const p = getCanvasPos(evt);
+    stampAt(p.x, p.y);
+  });
+  function endStroke() {
+    if (!drawing) return;
+    drawing = false;
+    history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (history.length > 20) history.shift();
+    btnUndo.disabled = false;
+  }
+  canvas.addEventListener('pointerup', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+
+  btnUndo.addEventListener('click', () => {
+    if (history.length <= 1) return;
+    history.pop();
+    ctx.putImageData(history[history.length - 1], 0, 0);
+    if (history.length <= 1) btnUndo.disabled = true;
+  });
+
+  btnRetake.addEventListener('click', () => {
+    photoStage = 'camera';
+    canvas.classList.add('hidden');
+    video.classList.remove('hidden');
+    btnShot.disabled = false;
+    btnUndo.disabled = true;
+    btnRetake.disabled = true;
+    btnSave.disabled = true;
+    strengthInput.disabled = false;
+    hint.textContent = '「撮影」を押すと写真が固定され、なぞってモザイクをかけられます';
+    startCamera();
+  });
+
+  btnSave.addEventListener('click', () => {
+    const link = document.createElement('a');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    link.download = `mosaic-${ts}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
+
+  // ============================================================
+  //  動画モード
+  // ============================================================
+  let mediaRecorder = null;
+  let rawChunks = [];
+  let rawBlobUrl = null;
+  let recording = false;
+  let maskRegions = [];   // {id, x, y, w, h, shape} すべて 0〜1 の割合で保持
+  let selectedMaskId = null;
+  let maskSeq = 0;
+  let exportedUrl = null;
+
+  function pickMime() {
+    const candidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    for (const c of candidates) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return { mimeType: c };
+    }
+    return {};
+  }
+
+  // --- 録画開始/終了 ---
+  btnRecToggle.addEventListener('click', () => {
+    if (!recording) startRecording(); else stopRecording();
+  });
+
+  function startRecording() {
+    if (!video.srcObject) return;
+    rawChunks = [];
+    mediaRecorder = new MediaRecorder(video.srcObject, pickMime());
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) rawChunks.push(e.data); };
+    mediaRecorder.onstop = onRecordingStopped;
+    mediaRecorder.start();
+    recording = true;
+    btnRecToggle.textContent = '⏹ 録画終了';
+    recDot.classList.remove('hidden');
+    hint.textContent = '録画中です。撮り終えたら「録画終了」を押してください';
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    recording = false;
+    btnRecToggle.textContent = '⏺ 録画開始';
+    recDot.classList.add('hidden');
+  }
+
+  function onRecordingStopped() {
+    stopCameraTracks(); // マスク配置・書き出し中はカメラ不要なので止めておく(不要な映像を扱わないため)
+    const rawBlob = new Blob(rawChunks, { type: 'video/webm' });
+    rawChunks = [];
+    rawBlobUrl = URL.createObjectURL(rawBlob);
+    playback.src = rawBlobUrl;
+
+    playback.addEventListener('loadeddata', function onLoaded() {
+      playback.removeEventListener('loadeddata', onLoaded);
+      canvas.width = playback.videoWidth;
+      canvas.height = playback.videoHeight;
+      ctx.drawImage(playback, 0, 0, canvas.width, canvas.height);
+
+      video.classList.add('hidden');
+      canvas.classList.remove('hidden');
+      maskLayer.classList.remove('hidden');
+
+      btnRecToggle.disabled = true;
+      btnAddMask.disabled = false;
+      btnVideoRetake.disabled = false;
+      hint.textContent = 'モザイクをかけたい場所に枠を置いてください(ドラッグで移動、右下の丸で大きさ変更)';
+    }, { once: true });
+  }
+
+  // --- マスク枠の追加・選択・削除 ---
+  btnAddMask.addEventListener('click', () => {
+    const region = { id: ++maskSeq, x: 0.35, y: 0.15, w: 0.3, h: 0.3, shape: brushShape };
+    maskRegions.push(region);
+    renderMaskBox(region);
+    selectMask(region.id);
+    btnExport.disabled = false;
+    btnRemoveMask.disabled = false;
+  });
+
+  btnRemoveMask.addEventListener('click', () => {
+    if (selectedMaskId == null) return;
+    const el = document.getElementById('mask-' + selectedMaskId);
+    if (el) el.remove();
+    maskRegions = maskRegions.filter(r => r.id !== selectedMaskId);
+    selectedMaskId = null;
+    btnRemoveMask.disabled = maskRegions.length === 0;
+    btnExport.disabled = maskRegions.length === 0;
+  });
+
+  function selectMask(id) {
+    selectedMaskId = id;
+    document.querySelectorAll('.mask-box').forEach(el => {
+      el.classList.toggle('selected', el.id === 'mask-' + id);
+    });
+    const region = maskRegions.find(r => r.id === id);
+    if (region) setShape(region.shape);
+  }
+
+  function renderMaskBox(region) {
+    let el = document.getElementById('mask-' + region.id);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'mask-' + region.id;
+      el.className = 'mask-box';
+      const handle = document.createElement('div');
+      handle.className = 'handle';
+      el.appendChild(handle);
+      maskLayer.appendChild(el);
+      attachMaskDrag(el, region);
+    }
+    el.classList.toggle('circle', region.shape === 'circle');
+    el.style.left = (region.x * 100) + '%';
+    el.style.top = (region.y * 100) + '%';
+    el.style.width = (region.w * 100) + '%';
+    el.style.height = (region.h * 100) + '%';
+  }
+
+  // 枠のドラッグ移動 & 右下ハンドルでのリサイズ
+  function attachMaskDrag(el, region) {
+    const handle = el.querySelector('.handle');
+
+    el.addEventListener('pointerdown', (evt) => {
+      if (evt.target === handle) return; // ハンドル側は別処理
+      evt.stopPropagation();
+      selectMask(region.id);
+      el.setPointerCapture(evt.pointerId);
+      const rect = stage.getBoundingClientRect();
+      const startX = evt.clientX, startY = evt.clientY;
+      const origX = region.x, origY = region.y;
+
+      function onMove(e) {
+        const dx = (e.clientX - startX) / rect.width;
+        const dy = (e.clientY - startY) / rect.height;
+        region.x = Math.min(Math.max(origX + dx, 0), 1 - region.w);
+        region.y = Math.min(Math.max(origY + dy, 0), 1 - region.h);
+        renderMaskBox(region);
+      }
+      function onUp(e) {
+        el.releasePointerCapture(e.pointerId);
+        el.removeEventListener('pointermove', onMove);
+        el.removeEventListener('pointerup', onUp);
+      }
+      el.addEventListener('pointermove', onMove);
+      el.addEventListener('pointerup', onUp);
+    });
+
+    handle.addEventListener('pointerdown', (evt) => {
+      evt.stopPropagation();
+      selectMask(region.id);
+      handle.setPointerCapture(evt.pointerId);
+      const rect = stage.getBoundingClientRect();
+      const startX = evt.clientX, startY = evt.clientY;
+      const origW = region.w, origH = region.h;
+
+      function onMove(e) {
+        const dw = (e.clientX - startX) / rect.width;
+        const dh = (e.clientY - startY) / rect.height;
+        region.w = Math.min(Math.max(origW + dw, 0.05), 1 - region.x);
+        region.h = Math.min(Math.max(origH + dh, 0.05), 1 - region.y);
+        renderMaskBox(region);
+      }
+      function onUp(e) {
+        handle.releasePointerCapture(e.pointerId);
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+      }
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+    });
+  }
+
+  // --- 指定した範囲だけモザイクにする(動画の1コマごとに呼ぶ) ---
+  const tmpSmall = document.createElement('canvas');
+  function applyMosaicToRegionPx(destCtx, x, y, w, h, shape, blockSize) {
+    const sw = Math.max(1, Math.round(w / blockSize));
+    const sh = Math.max(1, Math.round(h / blockSize));
+    tmpSmall.width = sw; tmpSmall.height = sh;
+    tmpSmall.getContext('2d').drawImage(destCtx.canvas, x, y, w, h, 0, 0, sw, sh);
+
+    destCtx.save();
+    destCtx.beginPath();
+    if (shape === 'circle') destCtx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    else destCtx.rect(x, y, w, h);
+    destCtx.clip();
+    destCtx.imageSmoothingEnabled = false;
+    destCtx.drawImage(tmpSmall, x, y, w, h);
+    destCtx.imageSmoothingEnabled = true;
+    destCtx.restore();
+  }
+
+  // --- 書き出し ---
+  btnExport.addEventListener('click', async () => {
+    if (maskRegions.length === 0) return;
+    exportOverlay.classList.remove('hidden');
+    btnExport.disabled = true;
+    btnAddMask.disabled = true;
+    btnRemoveMask.disabled = true;
+    btnVideoRetake.disabled = true;
+
+    const w = canvas.width, h = canvas.height;
+    const blockSize = parseInt(strengthInput.value, 10);
+    const proc = document.createElement('canvas');
+    proc.width = w; proc.height = h;
+    const pctx = proc.getContext('2d', { willReadFrequently: true });
+
+    const outStream = proc.captureStream(30);
+    const outChunks = [];
+    const outRecorder = new MediaRecorder(outStream, pickMime());
+    outRecorder.ondataavailable = (e) => { if (e.data.size > 0) outChunks.push(e.data); };
+    const stopped = new Promise((resolve) => { outRecorder.onstop = resolve; });
+
+    let rendering = true;
+    function frameLoop() {
+      if (!rendering) return;
+      pctx.drawImage(playback, 0, 0, w, h);
+      maskRegions.forEach((r) => {
+        applyMosaicToRegionPx(pctx, r.x * w, r.y * h, r.w * w, r.h * h, r.shape, blockSize);
+      });
+      requestAnimationFrame(frameLoop);
+    }
+
+    outRecorder.start();
+    playback.currentTime = 0;
+    await playback.play();
+    frameLoop();
+
+    await new Promise((resolve) => {
+      playback.onended = resolve;
+    });
+    rendering = false;
+    outRecorder.stop();
+    await stopped;
+
+    const maskedBlob = new Blob(outChunks, { type: 'video/webm' });
+    exportedUrl = URL.createObjectURL(maskedBlob);
+
+    // 生の録画データはもう不要なので破棄する
+    if (rawBlobUrl) { URL.revokeObjectURL(rawBlobUrl); rawBlobUrl = null; }
+    playback.removeAttribute('src');
+    playback.load();
+
+    exportOverlay.classList.add('hidden');
+    maskLayer.classList.add('hidden');
+    btnVideoSave.disabled = false;
+    hint.textContent = '書き出しが終わりました。「保存」でモザイク済みの動画をダウンロードできます';
+  });
+
+  btnVideoSave.addEventListener('click', () => {
+    if (!exportedUrl) return;
+    const link = document.createElement('a');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    link.download = `mosaic-video-${ts}.webm`;
+    link.href = exportedUrl;
+    link.click();
+  });
+
+  function resetVideoMode() {
+    stopRecording();
+    if (rawBlobUrl) { URL.revokeObjectURL(rawBlobUrl); rawBlobUrl = null; }
+    if (exportedUrl) { URL.revokeObjectURL(exportedUrl); exportedUrl = null; }
+    playback.removeAttribute('src'); playback.load();
+    maskRegions = [];
+    selectedMaskId = null;
+    maskLayer.innerHTML = '';
+    maskLayer.classList.add('hidden');
+    exportOverlay.classList.add('hidden');
+    recDot.classList.add('hidden');
+
+    canvas.classList.add('hidden');
+    video.classList.remove('hidden');
+
+    btnRecToggle.disabled = false;
+    btnRecToggle.textContent = '⏺ 録画開始';
+    btnAddMask.disabled = true;
+    btnRemoveMask.disabled = true;
+    btnExport.disabled = true;
+    btnVideoSave.disabled = true;
+
+    hint.textContent = '「録画開始」を押して撮影し、終わったら「録画終了」を押してください';
+    startCamera();
+  }
+
+  btnVideoRetake.addEventListener('click', resetVideoMode);
+
+  // ============================================================
+  //  モード切り替え(写真 ⇔ 動画)
+  // ============================================================
+  function switchMode(target) {
+    if (target === appMode) return;
+    appMode = target;
+
+    // 進行中の状態をいったん全部リセットしてカメラを再起動する
+    stopRecording();
+    stopCameraTracks();
+    if (rawBlobUrl) { URL.revokeObjectURL(rawBlobUrl); rawBlobUrl = null; }
+    if (exportedUrl) { URL.revokeObjectURL(exportedUrl); exportedUrl = null; }
+    maskRegions = []; selectedMaskId = null; maskLayer.innerHTML = '';
+    history = []; mosaicCanvas = null; photoStage = 'camera';
+
+    canvas.classList.add('hidden');
+    video.classList.remove('hidden');
+    maskLayer.classList.add('hidden');
+    recDot.classList.add('hidden');
+    exportOverlay.classList.add('hidden');
+
+    tabPhoto.classList.toggle('active', target === 'photo');
+    tabVideo.classList.toggle('active', target === 'video');
+
+    if (target === 'photo') {
+      modeDesc.textContent = '撮影して、隠したい部分を指(またはマウス)でなぞってください';
+      hint.textContent = '「撮影」を押すと写真が固定され、なぞってモザイクをかけられます';
+      photoButtons.classList.remove('hidden');
+      videoButtons.classList.add('hidden');
+      videoSaveRow.classList.add('hidden');
+      brushRow.classList.remove('hidden');
+      btnShot.disabled = false; btnUndo.disabled = true; btnRetake.disabled = true; btnSave.disabled = true;
+      strengthInput.disabled = false;
+    } else {
+      modeDesc.textContent = '固定したカメラで録画し、隠したい場所に枠を置いてください';
+      hint.textContent = '「録画開始」を押して撮影し、終わったら「録画終了」を押してください';
+      photoButtons.classList.add('hidden');
+      videoButtons.classList.remove('hidden');
+      videoSaveRow.classList.remove('hidden');
+      brushRow.classList.add('hidden'); // 動画モードでは枠の大きさをドラッグで決めるため非表示
+      btnRecToggle.disabled = false; btnAddMask.disabled = true; btnRemoveMask.disabled = true;
+      btnExport.disabled = true; btnVideoSave.disabled = true;
+      strengthInput.disabled = false;
+    }
+    startCamera();
+    fitStage();
+  }
+
+  tabPhoto.addEventListener('click', () => switchMode('photo'));
+  tabVideo.addEventListener('click', () => switchMode('video'));
+
+  // ---------- 初期化 ----------
+  startCamera();
+
+  // --- 個人情報ポリシーのモーダル ---
+  const policyModal = document.getElementById('policyModal');
+  const btnOpenPolicy = document.getElementById('btnOpenPolicy');
+  const btnClosePolicy = document.getElementById('btnClosePolicy');
+  btnOpenPolicy.addEventListener('click', () => policyModal.classList.remove('hidden'));
+  btnClosePolicy.addEventListener('click', () => policyModal.classList.add('hidden'));
+  policyModal.addEventListener('click', (evt) => {
+    if (evt.target === policyModal) policyModal.classList.add('hidden'); // 背景タップでも閉じる
+  });
+
+  // --- オフライン対応 ---
+  // 初回にネットへつながった状態で開くと、このページ一式が端末に保存(キャッシュ)される。
+  // 2回目以降はネットがなくても保存された内容から起動できる
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+})();
+</script>
+
+</body>
+</html>
