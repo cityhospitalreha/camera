@@ -703,9 +703,13 @@
 
   // ---------- 動画:録画 ----------
   function pickMime() {
+    // iPadの「写真」アプリはmp4(またはmov)しか動画として認識しないため、mp4を優先する。
+    // webmはPC(Chromeなど)でのテスト用のフォールバックとして残しておく
     const candidates = [
-      'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm',
-      'video/mp4;codecs=avc1', 'video/mp4'
+      'video/mp4;codecs=avc1.42E01E',
+      'video/mp4;codecs=avc1',
+      'video/mp4',
+      'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'
     ];
     for (const c of candidates) {
       if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return { mimeType: c };
@@ -713,9 +717,11 @@
     return {};
   }
   function mimeInfo(recorder) {
-    const mt = (recorder && recorder.mimeType) ? recorder.mimeType : 'video/webm';
+    // recorder.mimeTypeが取れない場合、ここではwebmではなくmp4だと仮定する
+    // (iPadでの利用がほとんどのため、mp4扱いにしたほうが写真アプリに保存できる可能性が高い)
+    const mt = (recorder && recorder.mimeType) ? recorder.mimeType : 'video/mp4';
     const container = mt.split(';')[0];
-    return { type: container, ext: container.includes('mp4') ? 'mp4' : 'webm' };
+    return { type: container, ext: container.includes('webm') ? 'webm' : 'mp4' };
   }
 
   btnRecToggle.addEventListener('click', () => {
