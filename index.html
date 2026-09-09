@@ -535,12 +535,20 @@
     liveRunning = true;
     const loop = () => {
       if (!liveRunning || frozen) return;
-      const w = canvas.width, h = canvas.height;
-      const blockSize = parseInt(strengthInput.value, 10);
-      ctx.drawImage(video, 0, 0, w, h);
-      maskRegions.forEach((r) => {
-        applyMosaicToRegionPx(ctx, r.x * w, r.y * h, r.w * w, r.h * h, r.shape, blockSize);
-      });
+      try {
+        const w = canvas.width, h = canvas.height;
+        const blockSize = parseInt(strengthInput.value, 10);
+        if (video.readyState >= 2 && w > 0 && h > 0) {
+          ctx.drawImage(video, 0, 0, w, h);
+          maskRegions.forEach((r) => {
+            const rw = Math.max(1, r.w * w), rh = Math.max(1, r.h * h);
+            applyMosaicToRegionPx(ctx, r.x * w, r.y * h, rw, rh, r.shape, blockSize);
+          });
+        }
+      } catch (err) {
+        // 1コマ分の描画に失敗しても、ここで止めずに次のコマへ進む
+        console.error('live loop error', err);
+      }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
@@ -616,9 +624,11 @@
         el.releasePointerCapture(e.pointerId);
         el.removeEventListener('pointermove', onMove);
         el.removeEventListener('pointerup', onUp);
+        el.removeEventListener('pointercancel', onUp);
       }
       el.addEventListener('pointermove', onMove);
       el.addEventListener('pointerup', onUp);
+      el.addEventListener('pointercancel', onUp);
     });
 
     handle.addEventListener('pointerdown', (evt) => {
@@ -640,9 +650,11 @@
         handle.releasePointerCapture(e.pointerId);
         handle.removeEventListener('pointermove', onMove);
         handle.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointercancel', onUp);
       }
       handle.addEventListener('pointermove', onMove);
       handle.addEventListener('pointerup', onUp);
+      handle.addEventListener('pointercancel', onUp);
     });
   }
 
