@@ -137,7 +137,12 @@
     height: 100%;
     object-fit: cover;
   }
-  #video { visibility: hidden; } /* 素材の取得だけに使い、画面には出さない(見えるのは常にモザイク済みのcanvas) */
+  /* videoはcanvasの下に重なって見た目には隠れる。
+     visibility:hidden などで完全に非表示にすると、iPadのSafariなどが
+     省電力のために映像の更新を止めてしまうことがあるため、あえて「普通に表示された状態」のまま
+     真上に不透明なcanvasを重ねることで結果的に見えなくしている */
+  #video { z-index: 0; }
+  #canvas { z-index: 1; background: #0d1113; }
   .placeholder {
     position: absolute;
     inset: 0;
@@ -154,6 +159,7 @@
   .mask-layer {
     position: absolute;
     inset: 0;
+    z-index: 2;
   }
   .mask-box {
     position: absolute;
@@ -491,6 +497,7 @@
         audio: false // 音声は録らない
       });
       video.srcObject = stream;
+      try { await video.play(); } catch (e) { /* autoplay属性側で再生されることもあるため、失敗しても致命的ではない */ }
       await new Promise((resolve) => {
         video.addEventListener('loadedmetadata', resolve, { once: true });
       });
