@@ -460,7 +460,7 @@
 <div class="modal-overlay hidden" id="offlineModal">
   <div class="modal-sheet">
     <h2>オフラインで使うには</h2>
-    <p class="updated">アプリからは機内モードを直接操作できません。手動で切り替えてください</p>
+    <p class="updated">個人情報保護のため、このアプリは基本的に機内モードにしてから使ってください。アプリからは機内モードを直接操作できないため、下の手順で先に切り替えてから始めてください。</p>
 
     <p style="font-size:12.5px; color:#5b6672; margin:10px 0 2px;">①アプリの画面のまま、右上から下にスワイプします</p>
     <img src="offline-step1.jpg" alt="アプリの画面の右上から下にスワイプする" style="width:auto;max-width:150px;display:block;margin:4px auto;border-radius:10px;">
@@ -1013,6 +1013,9 @@
     footerEl.classList.remove('hidden');
     startCamera();
   }, { once: true });
+
+  // 基本はオフライン(機内モード)で使う運用のため、開いたらまずこの案内を出す
+  offlineModal.classList.remove('hidden');
 
   // --- オフライン対応 ---
   if ('serviceWorker' in navigator) {
