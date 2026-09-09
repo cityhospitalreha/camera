@@ -48,18 +48,6 @@
     font-size: 12.5px;
     color: var(--ink-soft);
   }
-  .back-link {
-    background: none;
-    border: none;
-    padding: 0;
-    margin-top: 10px;
-    font-size: 13px;
-    color: var(--accent-dark);
-    font-weight: 500;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .back-link.hidden { display: none; }
   .policy-link {
     display: block;
     background: none;
@@ -82,43 +70,6 @@
     padding: 8px 14px;
     position: relative;
   }
-  .chooser {
-    width: 100%;
-    max-width: 420px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .chooser.hidden { display: none; }
-  .choice-btn {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    width: 100%;
-    padding: 20px;
-    border-radius: 16px;
-    border: 1px solid var(--border);
-    background: var(--panel);
-    cursor: pointer;
-    text-align: left;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .choice-btn:active { transform: translateY(1px); }
-  .choice-icon {
-    font-size: 30px;
-    flex-shrink: 0;
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-    background: #eef1f4;
-  }
-  .choice-text { display: flex; flex-direction: column; gap: 3px; }
-  .choice-label { font-size: 16px; font-weight: 600; color: var(--ink); }
-  .choice-desc { font-size: 12.5px; color: var(--ink-soft); }
-
   .stage {
     position: relative;
     width: 100%;
@@ -324,30 +275,12 @@
 
 <header>
   <h1>モザイクスタンプ</h1>
-  <p id="modeDesc">撮りたい方法を選んでください</p>
-  <button type="button" class="back-link hidden" id="btnBack">← モードを選び直す</button>
+  <p id="modeDesc">隠したい場所に枠を置いてから、撮影または録画してください</p>
   <button type="button" class="policy-link" id="btnOpenPolicy">🛈 個人情報の取り扱いについて</button>
 </header>
 
 <main id="mainArea">
-  <div class="chooser" id="chooser">
-    <button type="button" class="choice-btn" id="choosePhoto">
-      <span class="choice-icon">📷</span>
-      <span class="choice-text">
-        <span class="choice-label">写真を撮る</span>
-        <span class="choice-desc">隠す場所を決めてから撮影</span>
-      </span>
-    </button>
-    <button type="button" class="choice-btn" id="chooseVideo">
-      <span class="choice-icon">🎥</span>
-      <span class="choice-text">
-        <span class="choice-label">動画を撮る</span>
-        <span class="choice-desc">隠す場所を決めてから録画</span>
-      </span>
-    </button>
-  </div>
-
-  <div class="stage hidden" id="stage">
+  <div class="stage" id="stage">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
     <div class="mask-layer" id="maskLayer"></div>
@@ -356,7 +289,7 @@
   </div>
 </main>
 
-<footer id="footer" class="hidden">
+<footer id="footer">
   <div class="row">
     <label for="strength">モザイクの粗さ</label>
     <input type="range" id="strength" min="6" max="40" value="16">
@@ -376,8 +309,8 @@
   </div>
 
   <div class="buttons">
-    <button id="btnShot" class="action btn-primary btn-wide">📷 撮影</button>
-    <button id="btnRecToggle" class="action btn-primary btn-wide hidden">⏺ 録画開始</button>
+    <button id="btnShot" class="action btn-primary">📷 撮影</button>
+    <button id="btnRecToggle" class="action btn-primary">⏺ 録画開始</button>
   </div>
   <div class="buttons hidden" id="resultButtons">
     <button id="btnRetake" class="action btn-danger">🔄 撮り直し</button>
@@ -425,11 +358,7 @@
   const mainArea = document.getElementById('mainArea');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-  const chooser = document.getElementById('chooser');
-  const choosePhotoBtn = document.getElementById('choosePhoto');
-  const chooseVideoBtn = document.getElementById('chooseVideo');
   const footerEl = document.getElementById('footer');
-  const btnBack = document.getElementById('btnBack');
   const modeDesc = document.getElementById('modeDesc');
   const hint = document.getElementById('hint');
 
@@ -446,7 +375,6 @@
   const btnRetake = document.getElementById('btnRetake');
   const btnSave = document.getElementById('btnSave');
 
-  let appMode = null; // 'photo' | 'video'
   let brushShape = 'circle';
   let maskRegions = []; // {id, x, y, w, h, shape} すべて0〜1の割合
   let selectedMaskId = null;
@@ -458,7 +386,9 @@
   let mediaRecorder = null;
   let recordedChunks = [];
   let resultUrl = null;
+  let resultBlob = null;
   let resultExt = 'png';
+  let resultIsObjectUrl = false; // 動画はURL.createObjectURLで作るためrevokeが必要、写真は不要
 
   strengthInput.addEventListener('input', () => { strengthVal.textContent = strengthInput.value; });
   shapeCircleBtn.addEventListener('click', () => setShape('circle'));
@@ -488,7 +418,7 @@
   window.addEventListener('orientationchange', fitStage);
 
   // ---------- カメラ ----------
-  async function startCamera() {
+  async function startCamera(isRetry) {
     placeholder.textContent = 'カメラを起動しています…';
     placeholder.classList.remove('hidden');
     try {
@@ -498,9 +428,14 @@
       });
       video.srcObject = stream;
       try { await video.play(); } catch (e) { /* autoplay属性側で再生されることもあるため、失敗しても致命的ではない */ }
-      await new Promise((resolve) => {
-        video.addEventListener('loadedmetadata', resolve, { once: true });
-      });
+
+      // カメラの切り替え直後などで映像が来ないまま固まらないよう、
+      // 一定時間で諦めてエラー扱いにする(下の再試行につなげるため)
+      await Promise.race([
+        new Promise((resolve) => video.addEventListener('loadedmetadata', resolve, { once: true })),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('camera timeout')), 6000))
+      ]);
+
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       currentRatio = video.videoWidth / video.videoHeight;
@@ -508,7 +443,16 @@
       placeholder.classList.add('hidden');
       startLiveLoop();
     } catch (err) {
-      placeholder.textContent = 'カメラを起動できませんでした(権限やHTTPS接続をご確認ください)';
+      console.error('camera error', err);
+      if (video.srcObject) { video.srcObject.getTracks().forEach((t) => t.stop()); video.srcObject = null; }
+      if (!isRetry) {
+        // 直前まで動画を撮っていた場合など、カメラが解放されるまで一瞬間があるので
+        // 少し待ってから一度だけ自動で再試行する
+        placeholder.textContent = 'カメラを起動できませんでした。もう一度試しています…';
+        await new Promise((r) => setTimeout(r, 700));
+        return startCamera(true);
+      }
+      placeholder.textContent = 'カメラを起動できませんでした。「← モードを選び直す」からやり直すか、ページを再読み込みしてください';
     }
   }
 
@@ -669,6 +613,17 @@
     document.querySelectorAll('.mask-box').forEach((el) => el.classList.toggle('locked', locked));
   }
 
+  // 今の状態(ライブ中・録画中・結果あり)に応じて、ボタンの表示をまとめて切り替える
+  function updateActionButtons() {
+    const hasResult = !!resultUrl;
+    resultButtons.classList.toggle('hidden', !hasResult);
+    btnShot.classList.toggle('hidden', hasResult || recording);
+    btnRecToggle.classList.toggle('hidden', hasResult);
+    btnRecToggle.textContent = recording ? '⏹ 録画終了' : '⏺ 録画開始';
+    btnAddMask.disabled = hasResult || recording;
+    btnRemoveMask.disabled = hasResult || recording || maskRegions.length === 0;
+  }
+
   // ---------- 写真:撮影 ----------
   btnShot.addEventListener('click', () => {
     frozen = true;
@@ -677,13 +632,18 @@
     lockMaskBoxes(true);
 
     resultUrl = canvas.toDataURL('image/png');
+    resultBlob = null;
+    resultIsObjectUrl = false;
     resultExt = 'png';
 
-    btnShot.classList.add('hidden');
-    resultButtons.classList.remove('hidden');
-    btnAddMask.disabled = true;
-    btnRemoveMask.disabled = true;
-    hint.textContent = '撮影しました。「保存」でダウンロードできます';
+    updateActionButtons();
+    btnSave.disabled = true; // Blobの用意ができるまで一瞬だけ待つ
+    hint.textContent = '撮影しました。「保存」で写真アプリなどに保存できます';
+
+    canvas.toBlob((blob) => {
+      resultBlob = blob;
+      btnSave.disabled = false;
+    }, 'image/png');
   });
 
   // ---------- 動画:録画 ----------
@@ -719,9 +679,8 @@
     mediaRecorder.onstop = onRecordingStopped;
     mediaRecorder.start();
     recording = true;
-    btnRecToggle.textContent = '⏹ 録画終了';
     recDot.classList.remove('hidden');
-    btnAddMask.disabled = true; // 録画中に枠を増減すると扱いがややこしくなるため、位置調整のみ可能にする
+    updateActionButtons();
     hint.textContent = '録画中です。枠の位置はドラッグで調整できます';
   }
 
@@ -740,28 +699,46 @@
     const blob = new Blob(recordedChunks, { type });
     recordedChunks = [];
     resultUrl = URL.createObjectURL(blob);
+    resultBlob = blob;
+    resultIsObjectUrl = true;
     resultExt = ext;
 
-    btnRecToggle.classList.add('hidden');
-    resultButtons.classList.remove('hidden');
-    btnAddMask.disabled = true;
-    btnRemoveMask.disabled = true;
-    hint.textContent = '録画が終わりました。「保存」でダウンロードできます';
+    updateActionButtons();
+    hint.textContent = '録画が終わりました。「保存」で写真アプリなどに保存できます';
   }
 
   // ---------- 保存・撮り直し ----------
-  btnSave.addEventListener('click', () => {
+  btnSave.addEventListener('click', async () => {
     if (!resultUrl) return;
-    const link = document.createElement('a');
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    link.download = `mosaic-${ts}.${resultExt}`;
+    const filename = `mosaic-${ts}.${resultExt}`;
+
+    // iPadなどでは、ダウンロードするより「共有メニュー」を開いたほうが
+    // 「写真に保存」「AirDropで送る」などをその場で選べて分かりやすい
+    if (resultBlob && navigator.canShare) {
+      const file = new File([resultBlob], filename, { type: resultBlob.type });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+          return;
+        } catch (err) {
+          if (err && err.name === 'AbortError') return; // キャンセルされただけなので何もしない
+          // 共有に失敗した場合は、下のダウンロード方式にフォールバックする
+        }
+      }
+    }
+
+    const link = document.createElement('a');
+    link.download = filename;
     link.href = resultUrl;
     link.click();
+    hint.textContent = 'ダウンロードしました。Safari右上のダウンロードのアイコン、または「ファイル」アプリの「ダウンロード」から開けます';
   });
 
   function clearResult() {
-    if (appMode === 'video' && resultUrl) URL.revokeObjectURL(resultUrl);
+    if (resultIsObjectUrl && resultUrl) URL.revokeObjectURL(resultUrl);
     resultUrl = null;
+    resultBlob = null;
   }
 
   btnRetake.addEventListener('click', () => {
@@ -769,76 +746,12 @@
     frozen = false;
     recording = false;
     lockMaskBoxes(false);
-
-    if (appMode === 'photo') {
-      btnShot.classList.remove('hidden');
-    } else {
-      btnRecToggle.classList.remove('hidden');
-      btnRecToggle.textContent = '⏺ 録画開始';
-    }
-    resultButtons.classList.add('hidden');
-    btnAddMask.disabled = false;
-    btnRemoveMask.disabled = maskRegions.length === 0;
-    hint.textContent = appMode === 'photo'
-      ? '隠したい場所に枠を置いてから撮影してください'
-      : '隠したい場所に枠を置いてから録画を始めてください';
+    updateActionButtons();
+    hint.textContent = '隠したい場所に枠を置いてから、撮影または録画してください';
     startCamera(); // 枠の位置(maskRegions)はそのまま、カメラだけ再起動する
   });
 
-  // ---------- モード選択 / 選び直し ----------
-  function resetForNewMode() {
-    stopRecording();
-    stopLiveLoop();
-    stopCameraTracks();
-    clearResult();
-    frozen = false; recording = false;
-    maskRegions = []; selectedMaskId = null; maskLayer.innerHTML = '';
-    btnAddMask.disabled = false; btnRemoveMask.disabled = true;
-    resultButtons.classList.add('hidden');
-  }
-
-  function selectMode(target) {
-    appMode = target;
-    resetForNewMode();
-
-    chooser.classList.add('hidden');
-    stage.classList.remove('hidden');
-    footerEl.classList.remove('hidden');
-    btnBack.classList.remove('hidden');
-
-    if (target === 'photo') {
-      modeDesc.textContent = '隠す場所を決めてから撮影してください';
-      hint.textContent = '隠したい場所に枠を置いてから撮影してください';
-      btnShot.classList.remove('hidden');
-      btnRecToggle.classList.add('hidden');
-    } else {
-      modeDesc.textContent = '隠す場所を決めてから録画してください';
-      hint.textContent = '隠したい場所に枠を置いてから録画を始めてください';
-      btnShot.classList.add('hidden');
-      btnRecToggle.classList.remove('hidden');
-      btnRecToggle.textContent = '⏺ 録画開始';
-    }
-    startCamera();
-  }
-
-  function goBack() {
-    appMode = null;
-    resetForNewMode();
-    stage.classList.add('hidden');
-    footerEl.classList.add('hidden');
-    btnBack.classList.add('hidden');
-    chooser.classList.remove('hidden');
-    modeDesc.textContent = '撮りたい方法を選んでください';
-  }
-
-  choosePhotoBtn.addEventListener('click', () => selectMode('photo'));
-  chooseVideoBtn.addEventListener('click', () => selectMode('video'));
-  btnBack.addEventListener('click', goBack);
-
-  // ---------- 初期化 ----------
-  fitStage();
-
-  // --- 個人情報ポリシーのモーダル ---
+  // ---------- 個人情報ポリシーのモーダル ----------
   const policyModal = document.getElementById('policyModal');
   const btnOpenPolicy = document.getElementById('btnOpenPolicy');
   const btnClosePolicy = document.getElementById('btnClosePolicy');
@@ -847,6 +760,11 @@
   policyModal.addEventListener('click', (evt) => {
     if (evt.target === policyModal) policyModal.classList.add('hidden');
   });
+
+  // ---------- 初期化 ----------
+  fitStage();
+  updateActionButtons();
+  startCamera();
 
   // --- オフライン対応 ---
   if ('serviceWorker' in navigator) {
