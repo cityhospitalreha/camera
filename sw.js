@@ -1,12 +1,14 @@
 // キャッシュ(保存領域)の名前。中身を変えて再公開したときは、この末尾の数字を
 // 1つ増やすと、古いキャッシュが破棄されて新しい内容に確実に更新されます
-const CACHE_NAME = 'mosaic-stamp-v12';
+const CACHE_NAME = 'mosaic-stamp-v24';
 
 // 起動に必要な最低限のファイル一式
 const ASSETS = [
   './',
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  './offline-step1.jpg',
+  './offline-step2.png'
 ];
 
 // インストール時:必要なファイルをまとめて保存(キャッシュ)する

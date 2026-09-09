@@ -340,6 +340,7 @@
   <h1>モザイクスタンプ</h1>
   <p id="modeDesc">隠したい場所に枠を置いてから、撮影または録画してください</p>
   <button type="button" class="policy-link" id="btnOpenPolicy">🛈 個人情報の取り扱いについて</button>
+  <button type="button" class="policy-link" id="btnOpenOffline">📶 オフラインでの使い方</button>
 </header>
 
 <main id="mainArea">
@@ -453,6 +454,28 @@
     <p>本アプリは、訓練支援および院内資料(学会発表用の動画・画像等)作成にあたり、患者の個人が特定できる情報を秘匿することを目的とする。診断機能は有さず、臨床判断は療法士が行う。</p>
 
     <button type="button" class="modal-close" id="btnClosePolicy">閉じる</button>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="offlineModal">
+  <div class="modal-sheet">
+    <h2>オフラインで使うには</h2>
+    <p class="updated">アプリからは機内モードを直接操作できません。手動で切り替えてください</p>
+
+    <p style="font-size:12.5px; color:#5b6672; margin:10px 0 2px;">①アプリの画面のまま、右上から下にスワイプします</p>
+    <img src="offline-step1.jpg" alt="アプリの画面の右上から下にスワイプする" style="width:auto;max-width:150px;display:block;margin:4px auto;border-radius:10px;">
+
+    <p style="font-size:12.5px; color:#5b6672; margin:14px 0 2px;">②出てきたコントロールセンターの、この丸のボタンをタップします</p>
+    <img src="offline-step2.png" alt="コントロールセンターの中の、丸で囲った機内モードのボタン" style="width:auto;max-width:150px;display:block;margin:4px auto;border-radius:10px;">
+
+    <ol style="padding-left:20px; font-size:13px; line-height:1.8; color:#26303a; margin-top:14px;">
+      <li>画面の右上から、下に向かって指でスワイプする</li>
+      <li>出てきたコントロールセンターの中の、飛行機マーク(機内モード)をタップする</li>
+      <li>マークが青色になれば機内モードON。この状態でもアプリはそのまま使えます</li>
+    </ol>
+    <p style="font-size:12.5px; color:#5b6672;">※ 元に戻すときは、同じ場所をもう一度タップしてください。</p>
+
+    <button type="button" class="modal-close" id="btnCloseOffline">閉じる</button>
   </div>
 </div>
 
@@ -967,6 +990,16 @@
   btnClosePolicy.addEventListener('click', () => policyModal.classList.add('hidden'));
   policyModal.addEventListener('click', (evt) => {
     if (evt.target === policyModal) policyModal.classList.add('hidden');
+  });
+
+  // --- オフラインでの使い方モーダル ---
+  const offlineModal = document.getElementById('offlineModal');
+  const btnOpenOffline = document.getElementById('btnOpenOffline');
+  const btnCloseOffline = document.getElementById('btnCloseOffline');
+  btnOpenOffline.addEventListener('click', () => offlineModal.classList.remove('hidden'));
+  btnCloseOffline.addEventListener('click', () => offlineModal.classList.add('hidden'));
+  offlineModal.addEventListener('click', (evt) => {
+    if (evt.target === offlineModal) offlineModal.classList.add('hidden');
   });
 
   // ---------- 初期化 ----------
