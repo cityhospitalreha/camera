@@ -501,6 +501,7 @@
   let mediaRecorder = null;
   let recordedChunks = [];
   let resultUrl = null;
+  let resultKind = null; // null | 'photo' | 'video'
   let resultBlob = null;
   let resultExt = 'png';
   let resultIsObjectUrl = false; // 動画はURL.createObjectURLで作るためrevokeが必要、写真は不要
@@ -647,11 +648,12 @@
 
   // ---------- マスク枠(丸/四角の位置指定) ----------
   btnAddMask.addEventListener('click', () => {
-    const region = { id: ++maskSeq, x: 0.35, y: 0.15, w: 0.3, h: 0.3, shape: brushShape };
+    const region = { id: ++maskSeq, x: 0.3, y: 0.12, w: 0.4, h: 0.4, shape: brushShape };
     maskRegions.push(region);
     renderMaskBox(region);
     selectMask(region.id);
     btnRemoveMask.disabled = false;
+    bakeIntoPhotoIfNeeded(region); // 写真確定後の追加なら、その場でモザイクを足す
   });
 
   btnRemoveMask.addEventListener('click', () => {
@@ -663,8 +665,14 @@
     btnRemoveMask.disabled = maskRegions.length === 0;
   });
 
+  // 枠の編集をロックするかどうか:動画の結果が確定した後だけロックする
+  // (録画中はまだresultKindがnullなので編集できる。写真確定後もあとから足せるようにロックしない)
+  function isMaskEditingLocked() {
+    return resultKind === 'video';
+  }
+
   function selectMask(id) {
-    if (frozen) return; // 撮影後は位置固定
+    if (isMaskEditingLocked()) return;
     selectedMaskId = id;
     document.querySelectorAll('.mask-box').forEach((el) => {
       el.classList.toggle('selected', el.id === 'mask-' + id);
@@ -696,7 +704,7 @@
     const handle = el.querySelector('.handle');
 
     el.addEventListener('pointerdown', (evt) => {
-      if (frozen || evt.target === handle) return;
+      if (isMaskEditingLocked() || evt.target === handle) return;
       evt.stopPropagation();
       selectMask(region.id);
       el.setPointerCapture(evt.pointerId);
@@ -715,6 +723,7 @@
         el.removeEventListener('pointermove', onMove);
         el.removeEventListener('pointerup', onUp);
         el.removeEventListener('pointercancel', onUp);
+        bakeIntoPhotoIfNeeded(region); // 写真確定後の移動なら、その場でモザイクを足す
       }
       el.addEventListener('pointermove', onMove);
       el.addEventListener('pointerup', onUp);
@@ -722,7 +731,7 @@
     });
 
     handle.addEventListener('pointerdown', (evt) => {
-      if (frozen) return;
+      if (isMaskEditingLocked()) return;
       evt.stopPropagation();
       selectMask(region.id);
       handle.setPointerCapture(evt.pointerId);
@@ -741,6 +750,7 @@
         handle.removeEventListener('pointermove', onMove);
         handle.removeEventListener('pointerup', onUp);
         handle.removeEventListener('pointercancel', onUp);
+        bakeIntoPhotoIfNeeded(region); // 写真確定後のリサイズなら、その場でモザイクを足す
       }
       handle.addEventListener('pointermove', onMove);
       handle.addEventListener('pointerup', onUp);
@@ -755,33 +765,59 @@
   // 今の状態(ライブ中・録画中・結果あり)に応じて、ボタンの表示をまとめて切り替える
   function updateActionButtons() {
     const hasResult = !!resultUrl;
+    // 写真の結果に対しては、あとから枠を追加・移動して上塗りでモザイクを足せるようにする
+    // (モザイクを"戻す"ことはない仕組みなので、あとから足す分には安全なため)
+    const locksMaskEditing = recording || (hasResult && resultKind !== 'photo');
     resultButtons.classList.toggle('hidden', !hasResult);
     confirmRow.classList.toggle('hidden', !hasResult);
     btnShot.classList.toggle('hidden', hasResult || recording);
     btnRecToggle.classList.toggle('hidden', hasResult);
     btnRecToggle.textContent = recording ? '⏹ 録画終了' : '⏺ 録画開始';
-    btnAddMask.disabled = hasResult || recording;
-    btnRemoveMask.disabled = hasResult || recording || maskRegions.length === 0;
+    btnAddMask.disabled = locksMaskEditing;
+    btnRemoveMask.disabled = locksMaskEditing || maskRegions.length === 0;
     // 「確認しました」にチェックが入り、かつ保存用データの準備ができて初めて保存できる
     btnSave.disabled = !hasResult || !confirmCheck.checked || !resultBlob;
   }
   confirmCheck.addEventListener('change', updateActionButtons);
+
+  // 写真確定後に枠を追加・移動したときに呼ぶ。現在のキャンバスの内容に対して
+  // その枠の位置だけモザイクを追加で焼き込み、保存用データを作り直す
+  function bakeIntoPhotoIfNeeded(region) {
+    if (resultKind !== 'photo') return;
+    const w = canvas.width, h = canvas.height;
+    const blockSize = parseInt(strengthInput.value, 10);
+    applyMosaicToRegionPx(ctx, region.x * w, region.y * h, Math.max(1, region.w * w), Math.max(1, region.h * h), region.shape, blockSize);
+    refreshPhotoResult();
+  }
+
+  function refreshPhotoResult() {
+    resultUrl = canvas.toDataURL('image/png');
+    resultBlob = null;
+    confirmCheck.checked = false; // 内容が変わったので、もう一度確認してもらう
+    updateActionButtons();
+    hint.textContent = '枠を変更しました。内容を確認してから保存してください';
+    canvas.toBlob((blob) => {
+      resultBlob = blob;
+      updateActionButtons();
+    }, 'image/png');
+  }
 
   // ---------- 写真:撮影 ----------
   btnShot.addEventListener('click', () => {
     frozen = true;
     stopLiveLoop();
     stopCameraTracks();
-    lockMaskBoxes(true);
+    // 写真はあとから枠を追加・移動できるようにするため、ロックしない
 
     resultUrl = canvas.toDataURL('image/png');
     resultBlob = null;
     resultIsObjectUrl = false;
+    resultKind = 'photo';
     resultExt = 'png';
     confirmCheck.checked = false;
 
     updateActionButtons();
-    hint.textContent = 'モザイクの範囲を確認してから保存してください';
+    hint.textContent = '枠が足りない場所があれば、追加・移動してから保存してください';
 
     canvas.toBlob((blob) => {
       resultBlob = blob;
@@ -859,6 +895,7 @@
     resultUrl = URL.createObjectURL(blob);
     resultBlob = blob;
     resultIsObjectUrl = true;
+    resultKind = 'video';
     resultExt = ext;
     confirmCheck.checked = false;
 
@@ -903,6 +940,7 @@
     if (resultIsObjectUrl && resultUrl) URL.revokeObjectURL(resultUrl);
     resultUrl = null;
     resultBlob = null;
+    resultKind = null;
     resultVideo.pause();
     resultVideo.removeAttribute('src');
     resultVideo.load();
