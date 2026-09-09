@@ -560,7 +560,14 @@
     if (resultUrl) return;
     fitStage();
   });
-  window.addEventListener('orientationchange', fitStage);
+  window.addEventListener('orientationchange', () => {
+    // 回転でカメラ映像自体の縦横比が変わることがあるため、
+    // 分かる場合は実際のサイズを読み直してから枠のサイズを決め直す
+    if (video.videoWidth && video.videoHeight && !frozen) {
+      currentRatio = video.videoWidth / video.videoHeight;
+    }
+    fitStage();
+  });
 
   // ---------- カメラ ----------
   let cameraStarting = false; // 二重にstartCamera()が走らないようにするガード

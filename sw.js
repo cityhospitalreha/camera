@@ -1,6 +1,6 @@
 // キャッシュ(保存領域)の名前。中身を変えて再公開したときは、この末尾の数字を
 // 1つ増やすと、古いキャッシュが破棄されて新しい内容に確実に更新されます
-const CACHE_NAME = 'mosaic-stamp-v28';
+const CACHE_NAME = 'mosaic-stamp-v29';
 
 // 起動に必要な最低限のファイル一式
 const ASSETS = [
