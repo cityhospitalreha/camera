@@ -528,6 +528,7 @@
   let resultBlob = null;
   let resultExt = 'png';
   let resultIsObjectUrl = false; // 動画はURL.createObjectURLで作るためrevokeが必要、写真は不要
+  let resultToken = 0; // 撮影・撮り直しのたびに増やす番号。古い非同期処理の結果を無視するために使う
 
   strengthInput.addEventListener('input', () => { strengthVal.textContent = strengthInput.value; });
   shapeCircleBtn.addEventListener('click', () => setShape('circle'));
@@ -553,7 +554,12 @@
     stage.style.width = Math.floor(w) + 'px';
     stage.style.height = Math.floor(h) + 'px';
   }
-  window.addEventListener('resize', fitStage);
+  window.addEventListener('resize', () => {
+    // 撮影・録画の結果を確認している最中は、動画再生などをきっかけに
+    // Safari側の表示領域が変わっても、枠のサイズを変えないようにする
+    if (resultUrl) return;
+    fitStage();
+  });
   window.addEventListener('orientationchange', fitStage);
 
   // ---------- カメラ ----------
@@ -814,12 +820,15 @@
   }
 
   function refreshPhotoResult() {
+    resultToken++;
+    const myToken = resultToken;
     resultUrl = canvas.toDataURL('image/png');
     resultBlob = null;
     confirmCheck.checked = false; // 内容が変わったので、もう一度確認してもらう
     updateActionButtons();
     hint.textContent = '枠を変更しました。内容を確認してから保存してください';
     canvas.toBlob((blob) => {
+      if (myToken !== resultToken) return; // その後さらに撮り直し等があれば、この結果は捨てる
       resultBlob = blob;
       updateActionButtons();
     }, 'image/png');
@@ -832,6 +841,8 @@
     stopCameraTracks();
     // 写真はあとから枠を追加・移動できるようにするため、ロックしない
 
+    resultToken++;
+    const myToken = resultToken;
     resultUrl = canvas.toDataURL('image/png');
     resultBlob = null;
     resultIsObjectUrl = false;
@@ -843,6 +854,7 @@
     hint.textContent = '枠が足りない場所があれば、追加・移動してから保存してください';
 
     canvas.toBlob((blob) => {
+      if (myToken !== resultToken) return; // その後さらに撮り直し等があれば、この結果は捨てる
       resultBlob = blob;
       updateActionButtons();
     }, 'image/png');
@@ -960,6 +972,7 @@
   });
 
   function clearResult() {
+    resultToken++; // 保留中の古い非同期処理(toBlob等)をここで無効化する
     if (resultIsObjectUrl && resultUrl) URL.revokeObjectURL(resultUrl);
     resultUrl = null;
     resultBlob = null;
@@ -976,10 +989,14 @@
     clearResult();
     frozen = false;
     recording = false;
+    // 撮り直しは完全にやり直す扱いにするため、枠の位置も一緒に消す
+    maskRegions = [];
+    selectedMaskId = null;
+    maskLayer.innerHTML = '';
     lockMaskBoxes(false);
     updateActionButtons();
     hint.textContent = '隠したい場所に枠を置いてから、撮影または録画してください';
-    startCamera(); // 枠の位置(maskRegions)はそのまま、カメラだけ再起動する
+    startCamera();
   });
 
   // ---------- 個人情報ポリシーのモーダル ----------
