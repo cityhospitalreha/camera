@@ -131,6 +131,32 @@
      真上に不透明なcanvasを重ねることで結果的に見えなくしている */
   #video { z-index: 0; }
   #canvas { z-index: 1; background: #0d1113; }
+  #resultVideo { z-index: 3; background: #000; }
+  #resultVideo.hidden { display: none; }
+  .confirm-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    background: #fff8e6;
+    border: 1px solid #f0d999;
+    border-radius: 9px;
+  }
+  .confirm-row.hidden { display: none; }
+  .confirm-row input[type="checkbox"] {
+    margin-top: 2px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    accent-color: var(--accent);
+  }
+  .confirm-row label {
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.5;
+    width: auto;
+  }
   .placeholder {
     position: absolute;
     inset: 0;
@@ -330,6 +356,7 @@
   <div class="stage hidden" id="stage">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
+    <video id="resultVideo" class="hidden" controls playsinline></video>
     <div class="mask-layer" id="maskLayer"></div>
     <div class="rec-dot hidden" id="recDot"><span class="dot"></span>録画中</div>
     <div class="placeholder" id="placeholder">カメラを起動しています…</div>
@@ -359,9 +386,13 @@
     <button id="btnShot" class="action btn-primary">📷 撮影</button>
     <button id="btnRecToggle" class="action btn-primary">⏺ 録画開始</button>
   </div>
+  <div class="confirm-row hidden" id="confirmRow">
+    <input type="checkbox" id="confirmCheck">
+    <label for="confirmCheck">個人情報(顔・名前が分かるもの等)が写っていないことを確認しました</label>
+  </div>
   <div class="buttons hidden" id="resultButtons">
     <button id="btnRetake" class="action btn-danger">🔄 撮り直し</button>
-    <button id="btnSave" class="action btn-primary">💾 保存</button>
+    <button id="btnSave" class="action btn-primary" disabled>💾 保存</button>
   </div>
 
   <p class="hint" id="hint">隠したい場所に枠を置いてから撮影してください</p>
@@ -370,24 +401,56 @@
 <div class="modal-overlay hidden" id="policyModal">
   <div class="modal-sheet">
     <h2>個人情報の取り扱いについて</h2>
-    <p class="updated">最終更新:2026年9月</p>
+    <p class="updated">最終更新:2026年9月 / 作成:仙台市立病院リハビリテーション科</p>
 
-    <h3>アプリの構成</h3>
-    <p>本アプリはHTML・CSS・JavaScriptのみで構成された静的Webアプリケーションで、GitHub Pages上で公開されています。サーバー側のプログラムは存在せず、撮影した写真・動画がどこかに自動送信されることはありません。開発の一部にAnthropic社のClaude Codeを利用していますが、Claude Codeは開発支援ツールとして使用したものであり、設計・検証・公開・運用の責任は開発者が負います。</p>
+    <h3>1. アプリの構成</h3>
+    <p>本アプリはHTML・CSS・JavaScriptのみで構成された静的Webアプリケーションであり、GitHub Pages上で公開する。GitHub公式はGitHub Pagesを「Static Site Hosting Service」と定義しており、GitHubリポジトリ内のHTML、CSS、JavaScriptファイルを公開するサービスであると説明している。</p>
+    <p>開発にはAnthropic社のClaude Codeを利用する。Claude CodeはAnthropic公式において「コードベースを読み取り、複数ファイルを編集し、テストを実行するコーディングシステム」と説明されている。Claude Codeは開発支援ツールとして使用したものであり、設計・検証・公開・運用の責任は開発者が負う。</p>
+    <p>本アプリはサーバー側のプログラムを持たない。撮影・録画した映像は、端末のブラウザ内でのみ処理され、外部サーバーへ自動送信されることはない。</p>
 
-    <h3>モザイクの仕組みと個人情報</h3>
+    <h3>2. モザイク処理の仕組みと個人情報</h3>
+    <p>本アプリは、写真・動画から個人が特定できる部分(顔、氏名の記載物等)を隠す(モザイク処理を行う)ことを目的とする。診断や臨床判断を行う機能は持たず、それらは療法士が行うものとする。</p>
     <ul>
-      <li>撮影・録画を始める前に、隠したい場所(枠)を先に決めます。実際に「写真を撮る」「録画する」操作をした瞬間には、すでに枠の部分にモザイクがかかった状態でしか記録されません。</li>
-      <li>モザイクをかける前の映像がファイルとして保存されることはありません。カメラの映像は、モザイクを重ねるための一時的な下書きとして、その場で画面に描画されるだけです。</li>
-      <li>音声は録音しません(声も個人を特定しうる情報になり得るためです)。</li>
-      <li>写真・動画とも、すべての処理は端末のブラウザの中だけで行われ、外部サーバーへの送信は行いません。</li>
+      <li>撮影・録画を始める前に、隠したい場所(枠)を先に決める。実際に「写真を撮る」「録画する」操作をした瞬間には、既に枠の部分にモザイクがかかった状態でしか記録されない。</li>
+      <li>モザイクをかける前の映像がファイルとして保存されることはない。カメラの映像は、モザイクを重ねるための一時的な下書きとして、その場で画面に描画されるのみである。</li>
+      <li>音声は録音しない(声も個人を特定し得る情報になり得るため)。</li>
+      <li>保存の直前に、「個人情報が写っていないことを確認しました」という確認欄へのチェックを必須とし、目視確認を経なければ保存できない仕組みとしている。</li>
     </ul>
 
-    <h3>保存したファイルについて</h3>
-    <p>「保存」操作でダウンロードされた画像・動画ファイルは、個人情報(患者さんの写真・映像)そのものです。保存後の管理(保存場所・共有方法・削除のタイミングなど)は、所属施設の個人情報保護の方針に沿って利用者ご自身で行ってください。本アプリはモザイクをかけるための道具であり、保存後のファイル管理までは行いません。</p>
+    <h3>3. 個人情報リスクの考え方</h3>
+    <p>本アプリの利用にあたって想定されるリスクを、次の3段階に整理する。</p>
 
-    <h3>本アプリの目的・適用範囲</h3>
-    <p>本アプリは、写真・動画から個人が特定できる部分を隠す(モザイク処理をする)ことを目的としています。診断や臨床判断を行う機能は持たず、それらは療法士が行うものとします。</p>
+    <h3>3.1 撮影時に個人情報が写り込むリスク</h3>
+    <p>モザイクは撮影前に位置を決める設計のため、モザイク処理前の状態がファイルとして残ることはない。一方で、次のリスクは仕組みだけでは防ぎきれないため、保存前の目視確認によって利用者が確認する。</p>
+    <ul>
+      <li>モザイクの枠を置き忘れる。</li>
+      <li>枠の範囲から対象がはみ出す(特に動画で、撮影中に対象が動く場合)。</li>
+      <li>顔以外の個人情報(氏名の記載されたホワイトボード、腕章等)への意識が漏れる。</li>
+    </ul>
+
+    <h3>3.2 処理・通信時に外部へ漏えいするリスク</h3>
+    <p>本アプリはサーバー通信を行わない静的アプリであり、撮影・録画した映像が外部へ送信されることはない。処理はすべて端末のブラウザ内(メモリ上)で完結する。</p>
+
+    <h3>3.3 保存後のファイル管理リスク</h3>
+    <p>保存された写真・動画は、端末の「写真」アプリ等に格納される通常の個人情報ファイルと同様の扱いが必要になる。次のリスクは本アプリの機能では防げず、運用ルールに委ねられる。</p>
+    <ul>
+      <li>共有端末の場合、他の利用者からも閲覧できる状態になり得る。</li>
+      <li>退職者・異動者が使用していた端末に、データが残り続ける可能性がある。</li>
+    </ul>
+
+    <h3>4. 運用上の留意事項(端末の役割分担)</h3>
+    <p>個人情報の取り扱いに関する運用方針として、ネットワークに接続する端末と、接続しない端末とで役割を分ける考え方を採用する。</p>
+    <ul>
+      <li>ネットワークに接続する端末(PC・iPad):個人情報を保存・保持しない運用とする。本アプリでの撮影・モザイク処理・確認・保存はこちらの端末で行う。</li>
+      <li>ネットワークに接続しない端末:個人情報を保持してよい端末とする。ただしカメラを持たないため、本アプリの撮影機能は利用できない。氏名等の実個人情報を伴うデータの保管・集計は、既存の運用と同様にこちらの端末で行う。</li>
+    </ul>
+    <p>本アプリで作成する写真・動画は、モザイク処理によって個人が特定できない状態にした上で保存・共有することを前提としているため、上記の役割分担と矛盾しない。</p>
+
+    <h3>5. 保存したファイルについて</h3>
+    <p>「保存」操作によって書き出された画像・動画ファイルは、個人情報(患者の写真・映像)そのものである。保存後の管理(保存場所、共有方法、削除のタイミング等)は、所属施設の個人情報保護の方針に沿って利用者自身が行う。本アプリはモザイクをかけるための道具であり、保存後のファイル管理までは行わない。</p>
+
+    <h3>6. 本アプリの目的・適用範囲</h3>
+    <p>本アプリは、訓練支援および院内資料(学会発表用の動画・画像等)作成にあたり、患者の個人が特定できる情報を秘匿することを目的とする。診断機能は有さず、臨床判断は療法士が行う。</p>
 
     <button type="button" class="modal-close" id="btnClosePolicy">閉じる</button>
   </div>
@@ -398,6 +461,7 @@
   // ---------- 要素の取得 ----------
   const video = document.getElementById('video');
   const canvas = document.getElementById('canvas');
+  const resultVideo = document.getElementById('resultVideo');
   const maskLayer = document.getElementById('maskLayer');
   const recDot = document.getElementById('recDot');
   const placeholder = document.getElementById('placeholder');
@@ -421,6 +485,8 @@
   const btnShot = document.getElementById('btnShot');
   const btnRecToggle = document.getElementById('btnRecToggle');
   const resultButtons = document.getElementById('resultButtons');
+  const confirmRow = document.getElementById('confirmRow');
+  const confirmCheck = document.getElementById('confirmCheck');
   const btnRetake = document.getElementById('btnRetake');
   const btnSave = document.getElementById('btnSave');
 
@@ -467,7 +533,12 @@
   window.addEventListener('orientationchange', fitStage);
 
   // ---------- カメラ ----------
+  let cameraStarting = false; // 二重にstartCamera()が走らないようにするガード
   async function startCamera(isRetry) {
+    if (!isRetry) {
+      if (cameraStarting) return; // 連打などで既に起動処理中なら何もしない
+      cameraStarting = true;
+    }
     placeholder.textContent = 'カメラを起動しています…';
     placeholder.classList.remove('hidden');
     try {
@@ -505,11 +576,24 @@
         // 少し待ってから一度だけ自動で再試行する
         placeholder.textContent = 'カメラを起動できませんでした。もう一度試しています…';
         await new Promise((r) => setTimeout(r, 700));
-        return startCamera(true);
+        await startCamera(true);
+      } else {
+        placeholder.textContent = 'カメラを起動できませんでした。ページを再読み込みしてお試しください';
       }
-      placeholder.textContent = 'カメラを起動できませんでした。ページを再読み込みしてお試しください';
     }
+    if (!isRetry) cameraStarting = false;
   }
+
+  // アプリを切り替えて戻ってきた時など、カメラの映像が止まったままになっていないか確認し、
+  // 必要なら自動で再起動する(iPadはアプリ切り替え中にカメラを止めることがあるため)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (frozen || resultUrl || recording) return; // 撮影後・録画中はそのままにしておく
+    const track = video.srcObject && video.srcObject.getVideoTracks()[0];
+    if (!track || track.readyState !== 'live') {
+      startCamera();
+    }
+  });
 
   function stopCameraTracks() {
     if (video.srcObject) {
@@ -672,12 +756,16 @@
   function updateActionButtons() {
     const hasResult = !!resultUrl;
     resultButtons.classList.toggle('hidden', !hasResult);
+    confirmRow.classList.toggle('hidden', !hasResult);
     btnShot.classList.toggle('hidden', hasResult || recording);
     btnRecToggle.classList.toggle('hidden', hasResult);
     btnRecToggle.textContent = recording ? '⏹ 録画終了' : '⏺ 録画開始';
     btnAddMask.disabled = hasResult || recording;
     btnRemoveMask.disabled = hasResult || recording || maskRegions.length === 0;
+    // 「確認しました」にチェックが入り、かつ保存用データの準備ができて初めて保存できる
+    btnSave.disabled = !hasResult || !confirmCheck.checked || !resultBlob;
   }
+  confirmCheck.addEventListener('change', updateActionButtons);
 
   // ---------- 写真:撮影 ----------
   btnShot.addEventListener('click', () => {
@@ -690,14 +778,14 @@
     resultBlob = null;
     resultIsObjectUrl = false;
     resultExt = 'png';
+    confirmCheck.checked = false;
 
     updateActionButtons();
-    btnSave.disabled = true; // Blobの用意ができるまで一瞬だけ待つ
-    hint.textContent = '撮影しました。「保存」で写真アプリなどに保存できます';
+    hint.textContent = 'モザイクの範囲を確認してから保存してください';
 
     canvas.toBlob((blob) => {
       resultBlob = blob;
-      btnSave.disabled = false;
+      updateActionButtons();
     }, 'image/png');
   });
 
@@ -743,6 +831,15 @@
     recDot.classList.remove('hidden');
     updateActionButtons();
     hint.textContent = '録画中です。枠の位置はドラッグで調整できます';
+
+    // 録画中にアプリ切り替えなどでカメラが強制的に切れた場合、
+    // そのまま固まらないように、そこまでの内容で録画を打ち切って完成させる
+    const track = video.srcObject && video.srcObject.getVideoTracks()[0];
+    if (track) {
+      track.addEventListener('ended', () => {
+        if (recording) stopRecording();
+      }, { once: true });
+    }
   }
 
   function stopRecording() {
@@ -763,9 +860,15 @@
     resultBlob = blob;
     resultIsObjectUrl = true;
     resultExt = ext;
+    confirmCheck.checked = false;
+
+    // 静止した1コマだけでなく、録画した動画そのものを見返せるようにする
+    resultVideo.src = resultUrl;
+    resultVideo.classList.remove('hidden');
+    canvas.classList.add('hidden');
 
     updateActionButtons();
-    hint.textContent = '録画が終わりました。「保存」で写真アプリなどに保存できます';
+    hint.textContent = '録画した内容を再生して確認してから保存してください';
   }
 
   // ---------- 保存・撮り直し ----------
@@ -800,6 +903,12 @@
     if (resultIsObjectUrl && resultUrl) URL.revokeObjectURL(resultUrl);
     resultUrl = null;
     resultBlob = null;
+    resultVideo.pause();
+    resultVideo.removeAttribute('src');
+    resultVideo.load();
+    resultVideo.classList.add('hidden');
+    canvas.classList.remove('hidden');
+    confirmCheck.checked = false;
   }
 
   btnRetake.addEventListener('click', () => {
