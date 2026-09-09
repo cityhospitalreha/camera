@@ -70,6 +70,43 @@
     padding: 8px 14px;
     position: relative;
   }
+  .chooser {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .chooser.hidden { display: none; }
+  .choice-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    cursor: pointer;
+    text-align: left;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .choice-btn:active { transform: translateY(1px); }
+  .choice-icon {
+    font-size: 30px;
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: #eef1f4;
+  }
+  .choice-text { display: flex; flex-direction: column; gap: 3px; }
+  .choice-label { font-size: 16px; font-weight: 600; color: var(--ink); }
+  .choice-desc { font-size: 12.5px; color: var(--ink-soft); }
+
   .stage {
     position: relative;
     width: 100%;
@@ -280,7 +317,17 @@
 </header>
 
 <main id="mainArea">
-  <div class="stage" id="stage">
+  <div class="chooser" id="startScreen">
+    <button type="button" class="choice-btn" id="btnStart">
+      <span class="choice-icon">📷</span>
+      <span class="choice-text">
+        <span class="choice-label">カメラを起動する</span>
+        <span class="choice-desc">タップして開始してください</span>
+      </span>
+    </button>
+  </div>
+
+  <div class="stage hidden" id="stage">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
     <div class="mask-layer" id="maskLayer"></div>
@@ -289,7 +336,7 @@
   </div>
 </main>
 
-<footer id="footer">
+<footer id="footer" class="hidden">
   <div class="row">
     <label for="strength">モザイクの粗さ</label>
     <input type="range" id="strength" min="6" max="40" value="16">
@@ -359,6 +406,8 @@
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
   const footerEl = document.getElementById('footer');
+  const startScreen = document.getElementById('startScreen');
+  const btnStart = document.getElementById('btnStart');
   const modeDesc = document.getElementById('modeDesc');
   const hint = document.getElementById('hint');
 
@@ -762,9 +811,16 @@
   });
 
   // ---------- 初期化 ----------
+  // iPadのSafariなどは、ボタン操作を伴わずに自動でカメラを起動しようとすると
+  // 拒否することがあるため、最初の1回だけ明示的なタップを挟む
   fitStage();
   updateActionButtons();
-  startCamera();
+  btnStart.addEventListener('click', () => {
+    startScreen.classList.add('hidden');
+    stage.classList.remove('hidden');
+    footerEl.classList.remove('hidden');
+    startCamera();
+  }, { once: true });
 
   // --- オフライン対応 ---
   if ('serviceWorker' in navigator) {
