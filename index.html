@@ -555,18 +555,32 @@
     stage.style.height = Math.floor(h) + 'px';
   }
   window.addEventListener('resize', () => {
-    // 撮影・録画の結果を確認している最中は、動画再生などをきっかけに
-    // Safari側の表示領域が変わっても、枠のサイズを変えないようにする
-    if (resultUrl) return;
+    if (resultUrl) {
+      // 結果を確認している最中は、動画再生などで表示領域が"増える"分には
+      // 反応しない(枠が急に大きくなるのを防ぐ)。ただし表示領域が"減って"
+      // はみ出しそうな場合だけは追従して縮める
+      const availW = mainArea.clientWidth;
+      const availH = mainArea.clientHeight;
+      if (availW < stage.offsetWidth || availH < stage.offsetHeight) {
+        fitStage();
+      }
+      return;
+    }
     fitStage();
   });
   window.addEventListener('orientationchange', () => {
-    // 回転でカメラ映像自体の縦横比が変わることがあるため、
-    // 分かる場合は実際のサイズを読み直してから枠のサイズを決め直す
-    if (video.videoWidth && video.videoHeight && !frozen) {
-      currentRatio = video.videoWidth / video.videoHeight;
+    if (recording) {
+      // 録画中はカメラを止め直せないので、枠のサイズ調整だけ行う
+      fitStage();
+      return;
     }
-    fitStage();
+    if (!frozen && !resultUrl) {
+      // カメラの映像は、回転してもそれ自体は向きを変え直してくれないことが多いため、
+      // 少し待ってから(回転アニメーションが落ち着くのを待つ)カメラを取得し直す
+      setTimeout(() => { startCamera(); }, 350);
+    } else {
+      fitStage();
+    }
   });
 
   // ---------- カメラ ----------
