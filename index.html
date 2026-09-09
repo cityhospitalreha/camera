@@ -478,12 +478,18 @@
       video.srcObject = stream;
       try { await video.play(); } catch (e) { /* autoplay属性側で再生されることもあるため、失敗しても致命的ではない */ }
 
-      // カメラの切り替え直後などで映像が来ないまま固まらないよう、
-      // 一定時間で諦めてエラー扱いにする(下の再試行につなげるため)
-      await Promise.race([
-        new Promise((resolve) => video.addEventListener('loadedmetadata', resolve, { once: true })),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('camera timeout')), 6000))
-      ]);
+      // video.play()が終わった時点で、すでに映像のサイズ(メタデータ)が
+      // 分かっていることが多い。その場合は「まだ来ていないloadedmetadataイベント」を
+      // 待ち続けてタイムアウトしてしまうので、先に readyState を確認する
+      // (0 = HAVE_NOTHING: まだ何も分かっていない)
+      if (video.readyState === 0) {
+        await Promise.race([
+          new Promise((resolve) => video.addEventListener('loadedmetadata', resolve, { once: true })),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('camera timeout')), 6000))
+        ]);
+      }
+
+      if (!video.videoWidth || !video.videoHeight) throw new Error('video size not ready');
 
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -501,7 +507,7 @@
         await new Promise((r) => setTimeout(r, 700));
         return startCamera(true);
       }
-      placeholder.textContent = 'カメラを起動できませんでした。「← モードを選び直す」からやり直すか、ページを再読み込みしてください';
+      placeholder.textContent = 'カメラを起動できませんでした。ページを再読み込みしてお試しください';
     }
   }
 
